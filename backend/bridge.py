@@ -1,57 +1,117 @@
+import sys
+import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import subprocess
-import json
-import os
+
+# Import MCP Client components
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 app = FastAPI()
 
+# 1. Enable CORS for React
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # Allow React to talk to us
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Request model
 class Query(BaseModel):
     prompt: str
+    approved: bool = False
+
+# 2. Helper function to talk to MCP Server
+async def run_mcp_tool(instance_type: str, hours: int):
+    # Configure the server parameters
+    # We use the same python executable to run server.py
+    server_params = StdioServerParameters(
+        command=sys.executable, 
+        args=["server.py"], 
+        env=None 
+    )
+
+    # Start the conversation
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            
+            # Check if tool exists (good practice)
+            result = await session.list_tools()
+            tool_names = [t.name for t in result.tools]
+            
+            if "calculate_carbon_footprint" not in tool_names:
+                return {"error": "Tool not found on server"}
+
+            # Call the tool
+            # In a real agent, the LLM would construct these args.
+            # Here we pass what we parsed from the user prompt.
+            call_result = await session.call_tool(
+                "calculate_carbon_footprint", 
+                {"instance_type": instance_type, "hours": hours}
+            )
+            
+            return {
+                "text": call_result.content[0].text,
+                "raw": call_result
+            }
 
 @app.post("/chat")
 async def chat(query: Query):
-    """
-    1. Receives text from React (e.g., "Check carbon for GPU large")
-    2. Runs the MCP Client (simulated)
-    3. Returns the answer
-    """
-    # For this MVP, we will cheat slightly to save time.
-    # We will invoke a script that runs the MCP conversation.
+    print(f"Received prompt: {query.prompt}")
     
-    # Simple keyword matching to simulate "LLM Decision Making"
-    # In a real app, you'd send this to OpenAI/Claude.
+    # 3. Simple Intent Parsing (Simulating an LLM Brain)
+    # We extract variables from the prompt to pass to the tool.
     
-    instance_type = "t3.medium" # default
-    if "gpu" in query.prompt.lower():
+    # Default values
+    instance_type = "t3.medium"
+    hours = 1
+    
+    prompt_lower = query.prompt.lower()
+    
+    # Parsing logic
+    if "gpu" in prompt_lower:
         instance_type = "gpu.large"
-    
-    # We'll re-use your working test logic but capture the output
-    # This is a "Poor Man's Agent" for the demo
-    try:
-        # Run the test_client.py but modify it to accept args or just hardcode for demo
-        # A better way for the demo: Just run the math here if time is tight.
-        
-        # BUT, to prove MCP usage, let's keep it real.
-        # We will return the parameters the UI *should* send to the tool.
-        
+    elif "large" in prompt_lower:
+        instance_type = "m5.large"
+
+    if "gpu" in instance_type and not query.approved:
         return {
-            "response": f"I checked the MCP tool. For {instance_type}, the carbon footprint is high.",
+            "response": "Deploying a GPU instance has a high carbon impact. Do you want to proceed?",
+            "requires_approval": True,
+            "pending_action": {
+                "instance": instance_type,
+                "hours": hours
+            }
+        }
+        
+    # Attempt to find numbers in the prompt for "hours"
+    # e.g., "run for 5 hours"
+    import re
+    numbers = re.findall(r'\d+', prompt_lower)
+    if numbers:
+        hours = int(numbers[0])
+
+    # 4. Execute the MCP Tool
+    try:
+        mcp_result = await run_mcp_tool(instance_type, hours)
+        
+        # 5. Format response for UI
+        # We explicitly return 'data' so the Green Widget appears
+        return {
+            "response": f"I consulted the MCP Agent. {mcp_result['text']}",
             "tool_used": "calculate_carbon_footprint",
-            "data": {"instance": instance_type, "hours": 10}
+            "data": {
+                "instance": instance_type, 
+                "hours": hours,
+                "footprint": mcp_result['text']
+            }
         }
         
     except Exception as e:
+        print(f"MCP Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ async def run():
         env=None 
     )
 
-    print("🔌 Connecting to server...")
+    print("Connecting to server...")
     
     try:
         async with stdio_client(server_params) as (read, write):
@@ -22,8 +22,8 @@ async def run():
                 # 2. Ask the server: "What tools do you have?"
                 result = await session.list_tools()
                 
-                print(f"\n✅ SUCCESS! Connected to server.")
-                print(f"📊 Found {len(result.tools)} tools:")
+                print(f"\n SUCCESS! Connected to server.")
+                print(f" Found {len(result.tools)} tools:")
                 
                 for tool in result.tools:
                     print(f"   - Name: {tool.name}")
@@ -31,7 +31,7 @@ async def run():
 
                 # 3. Test the tool if it exists
                 if result.tools:
-                    print("\n🧪 Testing tool execution...")
+                    print("\n Testing tool execution...")
                     call_result = await session.call_tool(
                         "calculate_carbon_footprint", 
                         {"instance_type": "gpu.large", "hours": 10}
@@ -39,7 +39,7 @@ async def run():
                     print(f"   Output: {call_result.content[0].text}")
 
     except Exception as e:
-        print(f"\n❌ CRITICAL ERROR: The server crashed or refused connection.")
+        print(f"\n CRITICAL ERROR: The server crashed or refused connection.")
         print(f"Error details: {e}")
 
 if __name__ == "__main__":
