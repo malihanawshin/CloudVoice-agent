@@ -45,7 +45,7 @@ async def handle_call_tool(
         return [
             types.TextContent(
                 type="text",
-                text=f"Estimated CO2 footprint: {total:.2f} kg",
+                text=f"{total:.2f} kg",
             )
         ]
     
