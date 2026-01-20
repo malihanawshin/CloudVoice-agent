@@ -150,7 +150,7 @@ async def chat(query: Query):
                 from rag import search_knowledge_base # Import here to avoid circular imports
                 
                 topic = args.get("topic")
-                print(f"📖 Searching manual for: {topic}")
+                print(f"Searching manual for: {topic}")
                 
                 # Run Tool
                 knowledge = search_knowledge_base(topic)
