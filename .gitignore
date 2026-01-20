@@ -1,2 +1,8 @@
 .DS_Store
 .env
+backend/venv/
+backend/__pycache__/
+backend/knowledge_db/
+backend/.env
+cloudvoice-ui/node_modules/
+cloudvoice-ui/dist/
