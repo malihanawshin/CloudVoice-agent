@@ -22,20 +22,38 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["instance_type", "hours"],
             },
+        ),
+        types.Tool(
+            name="deploy_instance",
+            description="Actually deploy a cloud instance. REQUIRES APPROVAL for High Performance types.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "instance_type": {"type": "string"},
+                    "hours": {"type": "integer"}
+                },
+                "required": ["instance_type"]
+            },
         )
     ]
 
 @server.call_tool()
 async def handle_call_tool(
     name: str, arguments: dict | None
-) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-    if name == "calculate_carbon_footprint":
+) -> list[types.TextContent]:
+    if name == "deploy_instance":
+        return [types.TextContent(type="text", text="DEPLOYMENT_INITIATED")]
+    elif name == "calculate_carbon_footprint":
         # Extract arguments safely
         if not arguments:
             raise ValueError("Missing arguments")
         
         inst_type = arguments.get("instance_type", "unknown")
-        hours = arguments.get("hours", 0)
+        try:
+            hours = int(arguments.get("hours", 0))
+        except ValueError:
+            hours = 0 
+
 
         # Mock Logic
         emissions_map = {"t3.medium": 0.05, "gpu.large": 1.2}

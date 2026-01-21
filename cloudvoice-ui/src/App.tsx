@@ -205,16 +205,26 @@ function App() {
                     </motion.div>
                   )}
 
-                  {msg.requires_approval && (
+                    {msg.requires_approval && (
                     <motion.div initial={{opacity:0}} animate={{opacity:1}} className="mt-3 flex gap-3 ml-1">
+                      {/* Approve Button */}
                       <button 
                         onClick={() => handleSendMessage("", true, msg.pending_action)}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20"
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-2 transition-all shadow-lg"
                       >
                         <ShieldCheck size={14} /> AUTHORIZE DEPLOYMENT
                       </button>
+
+                      {/* Cancel Button */}
+                      <button 
+                        onClick={() => setMessages(prev => [...prev, {id: Date.now().toString(), role: 'system', text: "Deployment Cancelled by User."}])}
+                        className="px-4 py-2 bg-red-900/40 hover:bg-red-900/60 border border-red-500/30 text-red-200 text-xs font-bold rounded-lg transition-all"
+                      >
+                        CANCEL
+                      </button>
                     </motion.div>
                   )}
+
                 </motion.div>
               ))}
             </AnimatePresence>
