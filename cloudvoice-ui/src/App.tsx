@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Mic, MicOff, Cpu, Leaf, Terminal, Activity, Server, ShieldCheck, Database } from 'lucide-react';
+import { Mic, Leaf, Cpu, Terminal, Activity, Server, ShieldCheck, Database, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// --- TYPES ---
 type Message = {
   id: string;
   role: 'user' | 'agent' | 'system';
@@ -21,8 +20,6 @@ type LogEntry = {
   status: 'info' | 'success' | 'warning';
 };
 
-// --- CONFIG ---
-// Change this to your Render URL later!
 const API_URL = 'http://localhost:8000/chat'; 
 
 function App() {
@@ -32,6 +29,73 @@ function App() {
   const [status, setStatus] = useState('System Idle');
   const recognitionRef = useRef<any>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+    const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        // Create audio blob
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await sendAudioToWhisper(audioBlob);
+        
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setStatus('Recording...');
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      alert("Could not access microphone.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const sendAudioToWhisper = async (audioBlob: Blob) => {
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", audioBlob);
+
+      const response = await fetch("http://localhost:8000/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Transcription failed");
+
+      const data = await response.json();
+      
+      handleSendMessage(data.text); 
+
+    } catch (error) {
+      console.error("Error uploading audio:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   // Helper to add logs
   const addLog = (source: LogEntry['source'], message: string, status: LogEntry['status'] = 'info') => {
@@ -80,15 +144,6 @@ function App() {
       addLog('SYSTEM', 'CRITICAL: Browser Speech API not supported.', 'warning');
     }
   }, []);
-
-  const toggleMic = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-    } else {
-      recognitionRef.current?.start();
-      setIsListening(true);
-    }
-  };
 
   const handleSendMessage = async (text: string, isApproval = false, pendingData: any = null) => {
     if (!text && !isApproval) return;
@@ -151,9 +206,9 @@ function App() {
           {/* Header */}
           <header className="px-6 py-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
             <div className="flex items-center gap-3">
-              {/* <div className="p-2 bg-blue-600/20 rounded-lg border border-blue-500/30">
+              <div className="p-2 bg-blue-600/20 rounded-lg border border-blue-500/30">
                 <Cpu size={20} className="text-blue-400" />
-              </div> */}
+              </div>
               <div>
                 <h1 className="text-lg font-bold text-white tracking-wide">CloudVoice <span className="text-blue-500">Agent</span></h1>
                 <div className="flex items-center gap-2">
@@ -234,15 +289,17 @@ function App() {
           <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-slate-900 via-slate-900/90 to-transparent flex justify-center z-10 pointer-events-none">
             <div className="pointer-events-auto flex flex-col items-center gap-3">
                <div className="h-6 text-xs font-mono text-blue-400 tracking-widest">{status.toUpperCase()}</div>
-               <button 
-                onClick={toggleMic}
-                className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl ${
-                  isListening ? 'bg-red-500 scale-110 shadow-red-500/40' : 'bg-slate-700 hover:bg-blue-600 border border-slate-600'
-                }`}
-              >
-                {isListening && <span className="absolute inset-0 rounded-full animate-ping bg-red-500/50" />}
-                {isListening ? <MicOff size={24} className="text-white relative z-10"/> : <Mic size={24} className="text-slate-300 relative z-10"/>}
-              </button>
+                  <button
+                    type="button" // Important so it doesn't submit the form
+                    onClick={isRecording ? stopRecording : startRecording}
+                    className={`p-3 rounded-full transition-all ${
+                      isRecording 
+                        ? "bg-red-500 hover:bg-red-600 animate-pulse text-white" 
+                        : "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                    }`}
+                  >
+                    {isRecording ? <Square size={20} /> : <Mic size={20} />}
+                  </button>
             </div>
           </div>
         </div>

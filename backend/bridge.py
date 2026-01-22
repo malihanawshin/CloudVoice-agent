@@ -1,8 +1,6 @@
 import sys
-import asyncio
 import json
-import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI  
@@ -46,6 +44,20 @@ async def run_mcp_tool(instance_type: str, hours: int):
 history = [
     {"role": "system", "content": "You are CloudVoice. You have a tool to calculate carbon. Always ask for instance type and hours if missing. If the user says 'lodge', assume they mean 'large'. Be concise."}
 ]
+
+@app.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    try:
+        # OpenAI expects a tuple (filename, file_object, content_type)
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1", 
+            file=("audio.webm", file.file, "audio/webm")
+        )
+        print(f"Transcribed: {transcript.text}")
+        return {"text": transcript.text}
+    except Exception as e:
+        print(f"Transcription Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/chat")
 async def chat(query: Query):
@@ -134,13 +146,13 @@ async def chat(query: Query):
             # ====================================================
             if fn_name == "calculate_carbon_footprint":
                 try:
-                    # FIX: Pass specific arguments, not the whole dict
+                    # Pass specific arguments, not the whole dict
                     tool_result = await run_mcp_tool(instance_type, hours)
                 except Exception as e:
                     tool_result = f"Error executing tool: {str(e)}"
                     print(f"MCP Tool Failed: {e}")
 
-                # CRITICAL: Append the result to history
+                # Append the result to history
                 history.append({
                     "role": "tool", 
                     "tool_call_id": tool_call.id, 
@@ -169,7 +181,7 @@ async def chat(query: Query):
                     }
                 
                 # IF APPROVED:
-                # Add fake tool output to keep history consistent
+                # Add mock tool output to keep history consistent
                 history.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
@@ -187,7 +199,6 @@ async def chat(query: Query):
             # ====================================================
             elif fn_name == "consult_manual":
                 try:
-                    # Assuming you have a file named rag.py
                     from rag import search_knowledge_base 
                     
                     topic = args.get("topic")
