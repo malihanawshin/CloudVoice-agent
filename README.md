@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-CloudVoice Agent is a research-oriented prototype designed to explore the intersection of Large Language Models (LLMs), speech processing, and sustainable infrastructure operations. This project implements a "Voice-Ops" system that allows users to manage cloud resources using natural language commands. It focuses on the reliability of agentic workflows, integrating Speech-to-Text (STT) systems with decision-making agents to optimize cloud deployments and monitor carbon emissions.
+CloudVoice Agent is designed to explore the intersection of Large Language Models (LLMs), speech processing, and sustainable infrastructure operations. This project implements a "Voice-Ops" system that allows users to manage cloud resources using natural language commands. It focuses on the reliability of agentic workflows, integrating Speech-to-Text (STT) systems with decision-making agents to optimize cloud deployments and monitor carbon emissions.
 
 ## Core Research Focus
 
