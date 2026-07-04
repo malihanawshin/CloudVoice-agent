@@ -23,14 +23,14 @@ type LogEntry = {
 const API_URL = 'http://localhost:8000/chat'; 
 
 function App() {
-  const [isListening, setIsListening] = useState(false);
+  const [, setIsListening] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [status, setStatus] = useState('System Idle');
   const recognitionRef = useRef<any>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
