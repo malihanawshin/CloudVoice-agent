@@ -1,0 +1,125 @@
+name: Green CI Metrics
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  green-metrics:
+    runs-on: ubuntu-latest
+    env:
+      GREEN_METRICS_URL: ${{ secrets.GREEN_METRICS_URL }}
+      GREEN_METRICS_TOKEN: ${{ secrets.GREEN_METRICS_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: cloudvoice-ui/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install fastapi uvicorn openai python-dotenv mcp chromadb python-multipart
+
+      - name: Install frontend dependencies
+        working-directory: cloudvoice-ui
+        run: npm ci
+
+      - name: Record build start
+        id: build_start
+        run: echo "time=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Build backend and frontend
+        run: |
+          python -m py_compile backend/server.py backend/bridge.py backend/rag.py backend/ingest.py backend/test_client.py
+          cd cloudvoice-ui
+          npm run build
+
+      - name: Record build end
+        id: build_end
+        run: echo "time=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate build duration
+        id: build_duration
+        run: |
+          echo "duration=$((${{ steps.build_end.outputs.time }} - ${{ steps.build_start.outputs.time }}))" >> "$GITHUB_OUTPUT"
+
+      - name: Send build metric
+        run: |
+          curl --fail --show-error --silent -X POST "$GREEN_METRICS_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $GREEN_METRICS_TOKEN" \
+            -d '{
+              "repo": "${{ github.repository }}",
+              "branch": "${{ github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "duration": ${{ steps.build_duration.outputs.duration }},
+              "runner_type": "${{ runner.os }}",
+              "metric_type": "ci_build"
+            }'
+
+      - name: Record runtime smoke start
+        id: runtime_start
+        run: echo "time=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Runtime smoke test
+        env:
+          OPENAI_API_KEY: test-key-for-startup-only
+        run: |
+          cd backend
+          python -m uvicorn bridge:app --host 127.0.0.1 --port 8000 &
+          BACKEND_PID=$!
+
+          cd ../cloudvoice-ui
+          npm run dev -- --host 127.0.0.1 --port 5173 &
+          FRONTEND_PID=$!
+
+          trap "kill $FRONTEND_PID $BACKEND_PID 2>/dev/null || true" EXIT
+
+          for i in {1..30}; do
+            if curl --silent --fail http://127.0.0.1:8000/docs > /dev/null \
+              && curl --silent --fail http://127.0.0.1:5173 > /dev/null; then
+              echo "Backend and frontend are responding"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Runtime smoke test failed"
+          exit 1
+
+      - name: Record runtime smoke end
+        id: runtime_end
+        run: echo "time=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate runtime duration
+        id: runtime_duration
+        run: |
+          echo "duration=$((${{ steps.runtime_end.outputs.time }} - ${{ steps.runtime_start.outputs.time }}))" >> "$GITHUB_OUTPUT"
+
+      - name: Send runtime smoke metric
+        run: |
+          curl --fail --show-error --silent -X POST "$GREEN_METRICS_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $GREEN_METRICS_TOKEN" \
+            -d '{
+              "repo": "${{ github.repository }}",
+              "branch": "${{ github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "duration": ${{ steps.runtime_duration.outputs.duration }},
+              "runner_type": "${{ runner.os }}",
+              "metric_type": "runtime_smoke_test"
+            }'
